@@ -39,7 +39,7 @@ public class LocalCanvas : NetworkBehaviour
 
             if (isLocalPlayer)
             {
-                MyLog.Log("LocalCanvas", "Enabling canvas for localPlayer of netId: " + GetComponent<NetworkIdentity>().netId);
+                DevLog.Log("LocalCanvas", "Enabling canvas for localPlayer of netId: " + GetComponent<NetworkIdentity>().netId);
 
                 // Enable the HUD UI canvas for our local player instance. This will ensure
                 // that other player UIs will never overlap with the host or other clients...

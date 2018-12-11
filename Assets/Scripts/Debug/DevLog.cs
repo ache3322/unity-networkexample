@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 
-public static class MyLog 
+public static class DevLog 
 {
     public static void Log(string className, string text)
     {

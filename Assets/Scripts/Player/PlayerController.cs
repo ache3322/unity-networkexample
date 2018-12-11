@@ -5,15 +5,22 @@ using UnityEngine.Networking;
 
 public class PlayerController : NetworkBehaviour
 {
+    public CharacterState characterState;
+
     public GameObject bulletPrefab;
     public Transform bulletSpawn;
 
     public string tmpNetworkId;
 
+    private Health health;
+
 
     void Start()
     {
         var netId = GetComponent<NetworkIdentity>().netId;
+
+        characterState = GetComponent<CharacterState>();
+        health = GetComponent<Health>();
 
         Debug.Log("[PlayController.cs] The netId is: " + netId);
         if (isLocalPlayer)
@@ -29,6 +36,13 @@ public class PlayerController : NetworkBehaviour
         if (!isLocalPlayer)
             return;
 
+        if (characterState.status != CharacterStatus.ALIVE)
+        {
+            // The player is considered "DEAD" and thus
+            // they cannot move at all. Disable the input of the character
+            return;
+        }
+
         var x = Input.GetAxis("Horizontal") * Time.deltaTime * 150.0f;
         var z = Input.GetAxis("Vertical") * Time.deltaTime * 3.0f;
 
@@ -37,6 +51,7 @@ public class PlayerController : NetworkBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
+            SoundManager.instance.PlaySound("Fire");
             CmdFire();
         }
     }
@@ -44,7 +59,6 @@ public class PlayerController : NetworkBehaviour
     public override void OnStartLocalPlayer()
     {
         GetComponentInChildren<MeshRenderer>().material.color = Color.blue;
-        //GetComponentInChildren<MeshRenderer>().material.color = new Color(Random.Range(0F, 1F), Random.Range(0, 1F), Random.Range(0, 1F));
     }
 
     [Command]
@@ -63,5 +77,21 @@ public class PlayerController : NetworkBehaviour
 
         // Destroy the bullet after 2 seconds
         Destroy(bullet, 2.0f);
+    }
+
+    [Command]
+    public void CmdRevive()
+    {
+        characterState.status = CharacterStatus.ALIVE;
+        GetComponentInChildren<MeshRenderer>().material.color = Color.white;
+        health.currentHealth = 100;
+
+        RpcRevive();
+    }
+
+    [ClientRpc]
+    void RpcRevive()
+    {
+        GetComponentInChildren<MeshRenderer>().material.color = Color.blue;
     }
 }

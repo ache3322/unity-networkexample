@@ -10,6 +10,7 @@ public class Health : NetworkBehaviour
     [SyncVar(hook = "OnChangeHealth")]
     public float currentHealth = maxHealth;
 
+    public RectTransform littleHealthBar;
     public Slider healthBar;
 
     public void TakeDamage(float amount)
@@ -23,17 +24,26 @@ public class Health : NetworkBehaviour
         if (currentHealth <= 0.0f)
         {
             currentHealth = 0.0f;
-            Debug.Log("Dead!");
+            RpcOnPlayerDead();
+            DevLog.Log("Health", "Player id <" + GetComponent<NetworkIdentity>().netId + "> is dead...");
         }
-    }
-
-    public float CalculateHealth()
-    {
-        return currentHealth / maxHealth;
     }
 
     void OnChangeHealth(float health)
     {
-        healthBar.value = CalculateHealth();
+        littleHealthBar.sizeDelta = new Vector2(health, littleHealthBar.sizeDelta.y);
+        healthBar.value = health / maxHealth;
+    }
+
+
+    [ClientRpc]
+    void RpcOnPlayerDead()
+    {
+        // Change the color of the player to reflect their "dead" state
+        GetComponentInChildren<MeshRenderer>().material.color = Color.red;
+
+        // By setting the "isAlive" bool to false, we trigger
+        // the SyncVar hook in the CharacterState
+        GetComponent<CharacterState>().status = CharacterStatus.RESCUE;
     }
 }
