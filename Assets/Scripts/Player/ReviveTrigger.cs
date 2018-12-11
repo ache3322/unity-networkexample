@@ -1,56 +1,56 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 
-public class ReviveTrigger : MonoBehaviour
+public class ReviveTrigger : NetworkBehaviour
 {
-    public RectTransform revivePanel;
-    public Button reviveButton;
-
-    private CharacterState characterState;
+    public Button rescueButton;
     [SerializeField]
-    private PlayerController playerToRevive;
+    private PlayerController playerToRescue;
+
+    private string myNetId;
+    private NetworkInstanceId targetId;
 
 
-    
-    void OnEnable()
+    void Start()
     {
-        reviveButton.onClick.AddListener(TaskOnClick);
+        myNetId = gameObject.GetComponent<PlayerController>().tmpNetworkId;
+
+        targetId = NetworkInstanceId.Invalid;
+
+        if (isLocalPlayer)
+        {
+            rescueButton.onClick.AddListener(delegate { CmdRescueButtonOnClick(); });
+            rescueButton.gameObject.SetActive(false);
+        }
     }
 
     void OnDisable()
     {
-        reviveButton.onClick.RemoveListener(TaskOnClick);
+        DevLog.Log("ReviveTrigger", "OnDisable executing");
+        rescueButton.onClick.RemoveListener(delegate { CmdRescueButtonOnClick(); });
     }
-
-    void Start()
-    {
-        characterState = GetComponentInParent<CharacterState>();
-        revivePanel.gameObject.SetActive(false);
-    }
-
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
         {
-            if (characterState.status != CharacterStatus.ALIVE)
+            playerToRescue = other.GetComponent<PlayerController>();
+            // If the PLAYER i encounter is in a "RESCUE" state, therefore
+            // it means that i can attempt to revive the other person...
+            if (playerToRescue.characterState.status == CharacterStatus.RESCUE)
             {
                 // DEBUG
-                var otherId = other.GetComponent<PlayerController>().tmpNetworkId;
-                var myId = gameObject.GetComponentInParent<PlayerController>().tmpNetworkId;
+                targetId = other.GetComponent<NetworkIdentity>().netId;
 
-                // When Player2 ENTERS Player1 revive zone, we get Player2's UI revive panel
-                // so we can show it on Player2 screen...
-                var otherPlayerPanel = other.GetComponentInChildren<ReviveTrigger>();
-                otherPlayerPanel.revivePanel.gameObject.SetActive(true);
+                // When PLAYER1 (myself) enters the revive zone, we want to show the revive ui box
+                rescueButton.gameObject.SetActive(true);
 
-                // Also, when Player2 ENTERS the revive zone, we want to get Player1 gameObject...
-                other.GetComponentInChildren<ReviveTrigger>().playerToRevive = this.gameObject.GetComponentInParent<PlayerController>();
-
-                DevLog.Log("ReviveTrigger", "Player id <" + otherId + "> entered vicinity of <" + myId + ">");
+                DevLog.Log("ReviveTrigger", "Player id <" + myNetId + "> entered vicinity of <" + targetId.Value + ">");
             }
         }
     }
@@ -59,39 +59,47 @@ public class ReviveTrigger : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            if (characterState.status != CharacterStatus.ALIVE)
+            // If the PLAYER i encounter is in a "RESCUE" state, therefore
+            // it means that i can attempt to revive the other person...
+            if (playerToRescue != null && playerToRescue.characterState.status == CharacterStatus.RESCUE)
             {
                 // DEBUG
-                var otherId = other.GetComponent<PlayerController>().tmpNetworkId;
-                var myId = gameObject.GetComponentInParent<PlayerController>().tmpNetworkId;
+                targetId = other.GetComponent<NetworkIdentity>().netId;
 
-                // When Player2 EXITS Player1 revive zone, we get Player2's UI revive panel
-                // so we can disable it on Player2 screen...
-                var otherPlayerPanel = other.GetComponentInChildren<ReviveTrigger>();
-                otherPlayerPanel.revivePanel.gameObject.SetActive(false);
+                // When PLAYER1 (myself) enters the revive zone, we want to show the revive ui box
+                rescueButton.gameObject.SetActive(false);
 
-                // Also, when Player2 EXITS the revive zone, we cannot revive anyone...
-                other.GetComponentInChildren<ReviveTrigger>().playerToRevive = null;
-
-                DevLog.Log("ReviveTrigger", "Player id <" + otherId + "> exited vicinity of <" + myId + ">");
+                DevLog.Log("ReviveTrigger", "Player id <" + myNetId + "> exited vicinity of <" + targetId.Value + ">");
             }
         }
     }
 
 
-    void TaskOnClick()
+    [Command]
+    void CmdRescueButtonOnClick()
     {
-        var whoseId = gameObject.GetComponentInParent<PlayerController>().tmpNetworkId;
-
-        //Output this to console when Button1 or Button3 is clicked
-        DevLog.Log("ReviveTrigger", "Player id <" + whoseId + "> has clicked the button!");
-
-        if (this.playerToRevive != null)
+        if (playerToRescue != null)
         {
-            DevLog.Log("ReviveTrigger", "Player id <" + whoseId + "> attempting to revive <" + this.playerToRevive.tmpNetworkId + ">");
-            this.playerToRevive.CmdRevive();
-            this.revivePanel.gameObject.SetActive(false);
-            this.GetComponentInChildren<ReviveTrigger>().playerToRevive = null;
+            DevLog.Log("ReviveTrigger", "Player id <" + myNetId + "> attempting to revive <" + this.playerToRescue.tmpNetworkId + ">");
+
+            try
+            {
+                // Tell the server to RESCUE the downed player by restoring their health and their character appearance
+                playerToRescue.CmdOnPlayerRescue();
+            }
+            catch (Exception ex)
+            {
+                string error = ex.Message;
+                DevLog.Log("ReviveTrigger", "Exception thrown. Ignoring because player is already revived.\n" + error);
+            }
+
+            RpcSetRevivePanelActive(false);
         }
+    }
+
+    [ClientRpc]
+    void RpcSetRevivePanelActive(bool isActive)
+    {
+        rescueButton.gameObject.SetActive(isActive);
     }
 }

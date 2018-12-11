@@ -73,24 +73,47 @@ public class PlayerController : NetworkBehaviour
         // Add velocity to the bullet
         bullet.GetComponent<Rigidbody>().velocity = bullet.transform.forward * 6;
 
-        NetworkServer.SpawnWithClientAuthority(bullet, connectionToClient);
+        NetworkServer.Spawn(bullet);
 
         // Destroy the bullet after 2 seconds
         Destroy(bullet, 2.0f);
     }
 
     [Command]
-    public void CmdRevive()
+    public void CmdOnPlayerRescue()
     {
+        // Set the status of the character to ALIVE
         characterState.status = CharacterStatus.ALIVE;
-        GetComponentInChildren<MeshRenderer>().material.color = Color.white;
-        health.currentHealth = 100;
+        // Restore the health of the "rescued" player to full
+        // SyncVar will sync the health bar for all clients to see
+        health.currentHealth = Health.maxHealth;
 
-        RpcRevive();
+        GetComponentInChildren<MeshRenderer>().material.color = Color.white;
+
+        // We got to synchronize the character's colour across the network...
+        // 1. Target other clients and change the material to WHITE
+        // 2. Target specific clietn and change the material to BLUE
+        RpcOnPlayerRescue();
+        TargetOnPlayerRescue(connectionToClient);
     }
 
+    /// <summary>
+    /// Targets all clients.
+    /// When player is rescued, make changes to all client player objects.
+    /// </summary>
     [ClientRpc]
-    void RpcRevive()
+    void RpcOnPlayerRescue()
+    {
+        GetComponentInChildren<MeshRenderer>().material.color = Color.white;
+    }
+
+    /// <summary>
+    /// Targeted at a specific client player object.
+    /// When player is rescued, make changes to that player object.
+    /// </summary>
+    /// <param name="conn">The specific client we want to RPC.</param>
+    [TargetRpc]
+    void TargetOnPlayerRescue(NetworkConnection conn)
     {
         GetComponentInChildren<MeshRenderer>().material.color = Color.blue;
     }
